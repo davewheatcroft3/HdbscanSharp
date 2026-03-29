@@ -7,6 +7,14 @@ namespace HdbscanSharp.Runner
 {
     public interface IHdbscanRunner
     {
+        /// <summary>
+        /// Runs HDBSCAN over a typed dataset.
+        /// </summary>
+        /// <param name="clusterSelectionMethod">
+        /// Flat cluster extraction strategy.
+        /// Use <see cref="ClusterSelectionMethod.Eom"/> for prominent/persistent clusters (default),
+        /// or <see cref="ClusterSelectionMethod.Leaf"/> for finer, purity-first leaf clusters.
+        /// </param>
         public HdbscanResult<A> Run<A, B>(
             List<A> dataset,
             Func<A, B> getVector,
@@ -14,16 +22,26 @@ namespace HdbscanSharp.Runner
             int minClusterSize,
             Func<B[], Func<int, int, double>> getDistanceFunc,
             List<HdbscanConstraint> constraints = null,
-            double clusterSelectionEpsilon = 0
+            double clusterSelectionEpsilon = 0,
+            ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom
         );
 
+        /// <summary>
+        /// Runs HDBSCAN over an indexed dataset.
+        /// </summary>
+        /// <param name="clusterSelectionMethod">
+        /// Flat cluster extraction strategy.
+        /// Use <see cref="ClusterSelectionMethod.Eom"/> for prominent/persistent clusters (default),
+        /// or <see cref="ClusterSelectionMethod.Leaf"/> for finer, purity-first leaf clusters.
+        /// </param>
         public HdbscanResult Run(
             int datasetCount,
             int minPoints,
             int minClusterSize,
             Func<int, int, double> distanceFunc,
             List<HdbscanConstraint> constraints = null,
-            double clusterSelectionEpsilon = 0);
+            double clusterSelectionEpsilon = 0,
+            ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom);
     }
 
     public class HdbscanRunnerInstance : IHdbscanRunner
@@ -35,9 +53,10 @@ namespace HdbscanSharp.Runner
             int minClusterSize,
             Func<B[], Func<int, int, double>> getDistanceFunc,
             List<HdbscanConstraint> constraints = null,
-            double clusterSelectionEpsilon = 0)
+            double clusterSelectionEpsilon = 0,
+            ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom)
         {
-            return HdbscanRunner.Run(dataset, getVector, minPoints, minClusterSize, getDistanceFunc, constraints, clusterSelectionEpsilon);
+            return HdbscanRunner.Run(dataset, getVector, minPoints, minClusterSize, getDistanceFunc, constraints, clusterSelectionEpsilon, clusterSelectionMethod);
         }
 
         public HdbscanResult Run(
@@ -46,14 +65,23 @@ namespace HdbscanSharp.Runner
             int minClusterSize,
             Func<int, int, double> distanceFunc,
             List<HdbscanConstraint> constraints = null,
-            double clusterSelectionEpsilon = 0)
+            double clusterSelectionEpsilon = 0,
+            ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom)
         {
-            return HdbscanRunner.Run(datasetCount, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon);
+            return HdbscanRunner.Run(datasetCount, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon, clusterSelectionMethod);
         }
     }
 
     public class HdbscanRunner
     {
+        /// <summary>
+        /// Runs HDBSCAN over a typed dataset.
+        /// </summary>
+        /// <param name="clusterSelectionMethod">
+        /// Flat cluster extraction strategy.
+        /// Use <see cref="ClusterSelectionMethod.Eom"/> for prominent/persistent clusters (default),
+        /// or <see cref="ClusterSelectionMethod.Leaf"/> for finer, purity-first leaf clusters.
+        /// </param>
         public static HdbscanResult<A> Run<A, B>(
             List<A> dataset,
             Func<A, B> getVector,
@@ -61,12 +89,13 @@ namespace HdbscanSharp.Runner
             int minClusterSize,
             Func<B[], Func<int, int, double>> getDistanceFunc,
             List<HdbscanConstraint> constraints = null,
-            double clusterSelectionEpsilon = 0
+            double clusterSelectionEpsilon = 0,
+            ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom
         )
         {
             var vectors = dataset.Select(getVector).ToArray();
             var distanceFunc = getDistanceFunc(vectors);
-            var result = Run(dataset.Count, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon);
+            var result = Run(dataset.Count, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon, clusterSelectionMethod);
             var groups = result.Labels
                 .Select((group, index) => (group, dataset[index]))
                 .GroupBy(x => x.group)
@@ -88,13 +117,22 @@ namespace HdbscanSharp.Runner
             };
         }
 
+        /// <summary>
+        /// Runs HDBSCAN over an indexed dataset.
+        /// </summary>
+        /// <param name="clusterSelectionMethod">
+        /// Flat cluster extraction strategy.
+        /// Use <see cref="ClusterSelectionMethod.Eom"/> for prominent/persistent clusters (default),
+        /// or <see cref="ClusterSelectionMethod.Leaf"/> for finer, purity-first leaf clusters.
+        /// </param>
         public static HdbscanResult Run(
             int datasetCount,
             int minPoints,
             int minClusterSize,
             Func<int, int, double> distanceFunc,
             List<HdbscanConstraint> constraints = null,
-            double clusterSelectionEpsilon = 0)
+            double clusterSelectionEpsilon = 0,
+            ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom)
         {
             var numPoints = datasetCount;
 
@@ -134,6 +172,7 @@ namespace HdbscanSharp.Runner
                 hierarchy,
                 numPoints,
                 clusterSelectionEpsilon,
+                clusterSelectionMethod,
                 out var selectedClusters);
 
             var clusterPersistence = HdbscanAlgorithm.CalculateClusterPersistence(selectedClusters);
