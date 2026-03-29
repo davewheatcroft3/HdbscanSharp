@@ -62,7 +62,16 @@ var result = HdbscanRunner.Run(
     25, // MinPoints
     25, // MinClusterSize
     GenericCosineSimilarity.GetFunc(dataset), // dataset is float[][] or double[][]. You may also use GenericEuclideanDistance for euclidean distance.
-    clusterSelectionEpsilon: 0); // Optional. Similar to python's cluster_selection_epsilon.
+    clusterSelectionEpsilon: 0, // Optional. Similar to python's cluster_selection_epsilon.
+    clusterSelectionMethod: ClusterSelectionMethod.Eom); // Optional. EOM is the default.
+
+// LEAF mode (finer, purity-first clusters):
+var leafResult = HdbscanRunner.Run(
+    dataset.Length,
+    minPoints: 25,
+    minClusterSize: 25,
+    GenericCosineSimilarity.GetFunc(dataset),
+    clusterSelectionMethod: ClusterSelectionMethod.Leaf);
 
 // Or with DistanceHelpers: (more distances available and different options like sparse matrix, caching and multi-threading)
 
@@ -90,6 +99,10 @@ var result = HdbscanRunner.Run(
 
 // result.ClusterPersistence : persistence value for each selected cluster label.
 // result.RelativeValidity : global quality score for the selected clustering (higher is better).
+
+// Cluster selection methods:
+// - EOM  (default): prominent / stable clusters.
+// - LEAF: finer, more homogeneous seed clusters.
 
 // if result.HasInfiniteStability is true:
 // With your current settings, the K-NN density estimate is discontinuous as it is not well-defined

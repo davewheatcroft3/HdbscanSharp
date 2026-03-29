@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using HdbscanSharp.Runner;
 using HdbscanSharp.Utils;
 
 namespace HdbscanSharp.Hdbscanstar
@@ -488,10 +489,10 @@ namespace HdbscanSharp.Hdbscanstar
 			List<int[]> hierarchy,
 			int numPoints,
 			double clusterSelectionEpsilon,
+			ClusterSelectionMethod clusterSelectionMethod,
 			out List<Cluster> selectedClusters)
 		{
-			//Take the list of propagated clusters from the root cluster:
-			var solution = clusters[1].PropagatedDescendants;
+			var solution = GetClusterSolution(clusters, clusterSelectionMethod);
 			var epsilonSolution = GetEpsilonAdjustedSolution(solution, clusterSelectionEpsilon);
 			selectedClusters = epsilonSolution;
 
@@ -527,6 +528,23 @@ namespace HdbscanSharp.Hdbscanstar
 				}
 			}
 			return flatPartitioning;
+		}
+
+		private static List<Cluster> GetClusterSolution(
+			List<Cluster> clusters,
+			ClusterSelectionMethod clusterSelectionMethod)
+		{
+			if (clusterSelectionMethod == ClusterSelectionMethod.Leaf)
+			{
+				return clusters
+					.Where(cluster => cluster != null
+					                  && cluster.Label != 1
+					                  && !cluster.HasChildren)
+					.ToList();
+			}
+
+			// EOM/default: take the propagated clusters from the root cluster.
+			return clusters[1].PropagatedDescendants;
 		}
 
 		public static Dictionary<int, double> CalculateClusterPersistence(List<Cluster> selectedClusters)
