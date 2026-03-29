@@ -486,17 +486,21 @@ namespace HdbscanSharp.Hdbscanstar
 		public static int[] FindProminentClusters(
 			List<Cluster> clusters,
 			List<int[]> hierarchy,
-			int numPoints)
+			int numPoints,
+			double clusterSelectionEpsilon,
+			out List<Cluster> selectedClusters)
 		{
 			//Take the list of propagated clusters from the root cluster:
 			var solution = clusters[1].PropagatedDescendants;
+			var epsilonSolution = GetEpsilonAdjustedSolution(solution, clusterSelectionEpsilon);
+			selectedClusters = epsilonSolution;
 
 			var flatPartitioning = new int[numPoints];
 
 			//Store all the hierarchy positions at which to find the birth points for the flat clustering:
 			var significantHierarchyPositions = new SortedDictionary<int, List<int>>();
 
-			foreach (var cluster in solution)
+			foreach (var cluster in epsilonSolution)
 			{
 				var hierarchyPosition = cluster.HierarchyPosition;
 				if (significantHierarchyPositions.ContainsKey(hierarchyPosition))
@@ -523,6 +527,41 @@ namespace HdbscanSharp.Hdbscanstar
 				}
 			}
 			return flatPartitioning;
+		}
+
+		public static Dictionary<int, double> CalculateClusterPersistence(List<Cluster> selectedClusters)
+		{
+			var persistenceByCluster = new Dictionary<int, double>();
+
+			foreach (var cluster in selectedClusters)
+			{
+				if (cluster == null || cluster.Label == 0)
+					continue;
+
+				var denominator = cluster.InitialNumPoints <= 0 ? 1 : cluster.InitialNumPoints;
+				persistenceByCluster[cluster.Label] = cluster.Stability / denominator;
+			}
+
+			return persistenceByCluster;
+		}
+
+		public static double CalculateRelativeValidity(int[] labels, Dictionary<int, double> clusterPersistence)
+		{
+			var clusteredPoints = labels.Count(x => x > 0);
+			if (clusteredPoints == 0 || clusterPersistence.Count == 0)
+				return 0;
+
+			var sum = 0.0;
+			foreach (var entry in clusterPersistence)
+			{
+				var clusterSize = labels.Count(label => label == entry.Key);
+				if (clusterSize == 0)
+					continue;
+
+				sum += clusterSize * entry.Value;
+			}
+
+			return sum / clusteredPoints;
 		}
 
 		/// <summary>
@@ -591,6 +630,26 @@ namespace HdbscanSharp.Hdbscanstar
 			
 			parentCluster.AddPointsToVirtualChildCluster(points);
 			return null;
+		}
+
+		private static List<Cluster> GetEpsilonAdjustedSolution(List<Cluster> solution, double clusterSelectionEpsilon)
+		{
+			if (clusterSelectionEpsilon <= 0)
+				return new List<Cluster>(solution);
+
+			var adjustedClusters = new Dictionary<int, Cluster>();
+			foreach (var cluster in solution)
+			{
+				var epsilonCluster = cluster;
+				while (epsilonCluster.Parent != null && epsilonCluster.BirthLevel < clusterSelectionEpsilon)
+				{
+					epsilonCluster = epsilonCluster.Parent;
+				}
+
+				adjustedClusters[epsilonCluster.Label] = epsilonCluster;
+			}
+
+			return adjustedClusters.Values.ToList();
 		}
 
 		/// <summary>

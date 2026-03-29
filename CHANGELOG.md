@@ -1,5 +1,9 @@
 # Changelog
 
+### Unreleased
+- Expose `clusterSelectionEpsilon` as an optional input parameter in `HdbscanRunner.Run`.
+- Expose `ClusterPersistence` and `RelativeValidity` as outputs in `HdbscanResult`.
+
 ### 3.0.1
 - Add new overloaded function of HdbscanRunner.Run so it is easier to perform segmentation on classes
 - Add new interface IHdbscanRunner and class HdbscanRunnerInstance. So it is possible to mock the algorithm for unit testing purpose.
