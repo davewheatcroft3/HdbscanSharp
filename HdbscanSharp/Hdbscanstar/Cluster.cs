@@ -11,6 +11,7 @@ namespace HdbscanSharp.Hdbscanstar
 	{
 		private readonly double _birthLevel;
 		private double _deathLevel;
+		private readonly int _initialNumPoints;
 		private int _numPoints;
 		private double _propagatedStability;
 		private int _numConstraintsSatisfied;
@@ -23,6 +24,9 @@ namespace HdbscanSharp.Hdbscanstar
 		public double Stability { get; internal set; }
 		public bool HasChildren { get; internal set; }
 		public int Label { get; }
+		public double BirthLevel => _birthLevel;
+		public double DeathLevel => _deathLevel;
+		public int InitialNumPoints => _initialNumPoints;
 		public int HierarchyPosition { get; set; }    //First level where points with this cluster's label appear
 
 		/// <summary>
@@ -36,6 +40,7 @@ namespace HdbscanSharp.Hdbscanstar
 		{
 			_birthLevel = birthLevel;
 			_deathLevel = 0;
+			_initialNumPoints = numPoints;
 			_numPoints = numPoints;
 			_propagatedStability = 0;
 			_numConstraintsSatisfied = 0;

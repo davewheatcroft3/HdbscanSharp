@@ -31,4 +31,24 @@ Group: (-100, 97) (-98, 100) (-98, 95) (-97, 94) (-90, 93)";
         var actual = string.Join(Environment.NewLine, lines);
         Assert.Equal(expected, actual);
     }
+
+    [Fact]
+    public void ExposesRelativeValidityClusterPersistenceAndClusterSelectionEpsilon()
+    {
+        List<(int X, int Y)> points =
+        [
+            (0, 0), (0, 1), (1, 0), (2, 3),
+            (100, 97), (98, 100), (98, 95), (97, 94),
+            (-100, 97), (-98, 100), (-98, 95), (-97, 94), (-90, 93),
+            (-500, 1000), (500, 1000)
+        ];
+
+        var withoutEpsilon = HdbscanRunner.Run(points, point => new float[] { point.X, point.Y }, 3, 3, GenericEuclideanDistance.GetFunc);
+        var withEpsilon = HdbscanRunner.Run(points, point => new float[] { point.X, point.Y }, 3, 3, GenericEuclideanDistance.GetFunc, clusterSelectionEpsilon: 100);
+
+        Assert.NotNull(withoutEpsilon.ClusterPersistence);
+        Assert.NotEmpty(withoutEpsilon.ClusterPersistence);
+        Assert.True(withoutEpsilon.RelativeValidity >= 0);
+        Assert.True(withEpsilon.Groups.Count <= withoutEpsilon.Groups.Count);
+    }
 }

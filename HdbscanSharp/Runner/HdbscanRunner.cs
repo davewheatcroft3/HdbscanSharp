@@ -13,7 +13,8 @@ namespace HdbscanSharp.Runner
             int minPoints,
             int minClusterSize,
             Func<B[], Func<int, int, double>> getDistanceFunc,
-            List<HdbscanConstraint> constraints = null
+            List<HdbscanConstraint> constraints = null,
+            double clusterSelectionEpsilon = 0
         );
 
         public HdbscanResult Run(
@@ -21,7 +22,8 @@ namespace HdbscanSharp.Runner
             int minPoints,
             int minClusterSize,
             Func<int, int, double> distanceFunc,
-            List<HdbscanConstraint> constraints = null);
+            List<HdbscanConstraint> constraints = null,
+            double clusterSelectionEpsilon = 0);
     }
 
     public class HdbscanRunnerInstance : IHdbscanRunner
@@ -32,9 +34,10 @@ namespace HdbscanSharp.Runner
             int minPoints,
             int minClusterSize,
             Func<B[], Func<int, int, double>> getDistanceFunc,
-            List<HdbscanConstraint> constraints = null)
+            List<HdbscanConstraint> constraints = null,
+            double clusterSelectionEpsilon = 0)
         {
-            return HdbscanRunner.Run(dataset, getVector, minPoints, minClusterSize, getDistanceFunc, constraints);
+            return HdbscanRunner.Run(dataset, getVector, minPoints, minClusterSize, getDistanceFunc, constraints, clusterSelectionEpsilon);
         }
 
         public HdbscanResult Run(
@@ -42,9 +45,10 @@ namespace HdbscanSharp.Runner
             int minPoints,
             int minClusterSize,
             Func<int, int, double> distanceFunc,
-            List<HdbscanConstraint> constraints = null)
+            List<HdbscanConstraint> constraints = null,
+            double clusterSelectionEpsilon = 0)
         {
-            return HdbscanRunner.Run(datasetCount, minPoints, minClusterSize, distanceFunc, constraints);
+            return HdbscanRunner.Run(datasetCount, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon);
         }
     }
 
@@ -56,12 +60,13 @@ namespace HdbscanSharp.Runner
             int minPoints,
             int minClusterSize,
             Func<B[], Func<int, int, double>> getDistanceFunc,
-            List<HdbscanConstraint> constraints = null
+            List<HdbscanConstraint> constraints = null,
+            double clusterSelectionEpsilon = 0
         )
         {
             var vectors = dataset.Select(getVector).ToArray();
             var distanceFunc = getDistanceFunc(vectors);
-            var result = Run(dataset.Count, minPoints, minClusterSize, distanceFunc, constraints);
+            var result = Run(dataset.Count, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon);
             var groups = result.Labels
                 .Select((group, index) => (group, dataset[index]))
                 .GroupBy(x => x.group)
@@ -77,7 +82,9 @@ namespace HdbscanSharp.Runner
             {
                 Groups = groups,
                 OutliersScore = outliersScore,
-                HasInfiniteStability = result.HasInfiniteStability
+                HasInfiniteStability = result.HasInfiniteStability,
+                RelativeValidity = result.RelativeValidity,
+                ClusterPersistence = result.ClusterPersistence
             };
         }
 
@@ -86,7 +93,8 @@ namespace HdbscanSharp.Runner
             int minPoints,
             int minClusterSize,
             Func<int, int, double> distanceFunc,
-            List<HdbscanConstraint> constraints = null)
+            List<HdbscanConstraint> constraints = null,
+            double clusterSelectionEpsilon = 0)
         {
             var numPoints = datasetCount;
 
@@ -124,7 +132,12 @@ namespace HdbscanSharp.Runner
             var prominentClusters = HdbscanAlgorithm.FindProminentClusters(
                 clusters,
                 hierarchy,
-                numPoints);
+                numPoints,
+                clusterSelectionEpsilon,
+                out var selectedClusters);
+
+            var clusterPersistence = HdbscanAlgorithm.CalculateClusterPersistence(selectedClusters);
+            var relativeValidity = HdbscanAlgorithm.CalculateRelativeValidity(prominentClusters, clusterPersistence);
 
             // Compute outlier scores for each point
             var scores = HdbscanAlgorithm.CalculateOutlierScores(
@@ -137,7 +150,9 @@ namespace HdbscanSharp.Runner
             {
                 Labels = prominentClusters,
                 OutliersScore = scores,
-                HasInfiniteStability = infiniteStability
+                HasInfiniteStability = infiniteStability,
+                RelativeValidity = relativeValidity,
+                ClusterPersistence = clusterPersistence
             };
         }
     }

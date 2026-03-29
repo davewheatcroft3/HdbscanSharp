@@ -61,7 +61,8 @@ var result = HdbscanRunner.Run(
     dataset.Length, // The number of element in the dataset
     25, // MinPoints
     25, // MinClusterSize
-    GenericCosineSimilarity.GetFunc(dataset)); // dataset is float[][] or double[][]. You may also use GenericEuclideanDistance for euclidean distance.
+    GenericCosineSimilarity.GetFunc(dataset), // dataset is float[][] or double[][]. You may also use GenericEuclideanDistance for euclidean distance.
+    clusterSelectionEpsilon: 0); // Optional. Similar to python's cluster_selection_epsilon.
 
 // Or with DistanceHelpers: (more distances available and different options like sparse matrix, caching and multi-threading)
 
@@ -86,6 +87,9 @@ var result = HdbscanRunner.Run(
 // result.OutliersScore : for each data sample. (Id = Index in the array)
 // Outliers Score are sorted in ascending order by outlier score, with core distances used to break
 // outlier score ties, and ids used to break core distance ties.
+
+// result.ClusterPersistence : persistence value for each selected cluster label.
+// result.RelativeValidity : global quality score for the selected clustering (higher is better).
 
 // if result.HasInfiniteStability is true:
 // With your current settings, the K-NN density estimate is discontinuous as it is not well-defined
