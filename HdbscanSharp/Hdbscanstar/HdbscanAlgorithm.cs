@@ -261,16 +261,20 @@ namespace HdbscanSharp.Hdbscanstar
 					affectedClusterLabels.Remove(examinedClusterLabel);
 
 					var examinedVertices = new SortedSet<int>();
+					var verticesToRemove = new List<int>();
 
 					//Get all affected vertices that are members of the cluster currently being examined:
-					foreach (var vertex in affectedVertices.ToList())
+					foreach (var vertex in affectedVertices)
 					{
 						if (currentClusterLabels[vertex] == examinedClusterLabel)
 						{
 							examinedVertices.Add(vertex);
-							affectedVertices.Remove(vertex);
+							verticesToRemove.Add(vertex);
 						}
 					}
+
+					foreach (var vertex in verticesToRemove)
+						affectedVertices.Remove(vertex);
 
 					SortedSet<int> firstChildCluster = null;
 					LinkedList<int> unexploredFirstChildClusterPoints = null;
@@ -516,14 +520,14 @@ namespace HdbscanSharp.Hdbscanstar
 				var entry = significantHierarchyPositions.First();
 				significantHierarchyPositions.Remove(entry.Key);
 
-				var clusterList = entry.Value;
+				var clusterSet = new HashSet<int>(entry.Value);
 				var hierarchyPosition = entry.Key;
 				var lineContents = hierarchy[hierarchyPosition];
 				
 				for (var i = 0; i < lineContents.Length; i++)
 				{
 					var label = lineContents[i];
-					if (clusterList.Contains(label))
+					if (clusterSet.Contains(label))
 						flatPartitioning[i] = label;
 				}
 			}
@@ -565,18 +569,32 @@ namespace HdbscanSharp.Hdbscanstar
 
 		public static double CalculateRelativeValidity(int[] labels, Dictionary<int, double> clusterPersistence)
 		{
-			var clusteredPoints = labels.Count(x => x > 0);
-			if (clusteredPoints == 0 || clusterPersistence.Count == 0)
+			if (clusterPersistence.Count == 0)
+				return 0;
+
+			var clusteredPoints = 0;
+			var clusterSizes = new Dictionary<int, int>(clusterPersistence.Count);
+
+			foreach (var label in labels)
+			{
+				if (label <= 0)
+					continue;
+
+				clusteredPoints++;
+				if (clusterSizes.TryGetValue(label, out var count))
+					clusterSizes[label] = count + 1;
+				else
+					clusterSizes[label] = 1;
+			}
+
+			if (clusteredPoints == 0)
 				return 0;
 
 			var sum = 0.0;
 			foreach (var entry in clusterPersistence)
 			{
-				var clusterSize = labels.Count(label => label == entry.Key);
-				if (clusterSize == 0)
-					continue;
-
-				sum += clusterSize * entry.Value;
+				if (clusterSizes.TryGetValue(entry.Key, out var clusterSize))
+					sum += clusterSize * entry.Value;
 			}
 
 			return sum / clusteredPoints;
