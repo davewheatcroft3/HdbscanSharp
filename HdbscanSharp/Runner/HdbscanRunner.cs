@@ -1,7 +1,6 @@
 ﻿using HdbscanSharp.Hdbscanstar;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HdbscanSharp.Runner
 {
@@ -93,23 +92,36 @@ namespace HdbscanSharp.Runner
             ClusterSelectionMethod clusterSelectionMethod = ClusterSelectionMethod.Eom
         )
         {
-            var vectors = dataset.Select(getVector).ToArray();
+            var vectors = new B[dataset.Count];
+            for (var i = 0; i < dataset.Count; i++)
+            {
+                vectors[i] = getVector(dataset[i]);
+            }
             var distanceFunc = getDistanceFunc(vectors);
             var result = Run(dataset.Count, minPoints, minClusterSize, distanceFunc, constraints, clusterSelectionEpsilon, clusterSelectionMethod);
-            var groups = result.Labels
-                .Select((group, index) => (group, dataset[index]))
-                .GroupBy(x => x.group)
-                .OrderBy(x => x.Key)
-                .ToDictionary(x => x.Key, x => x.Select(t => t.Item2).ToList());
-            var outliersScore = result.OutliersScore
-                .Select((outlierScore, index) => new OutlierScore<A>(
-                    outlierScore.Score, outlierScore.CoreDistance, dataset[index])
-                )
-                .ToList();
+            var groups = new SortedDictionary<int, List<A>>();
+            for (var i = 0; i < result.Labels.Length; i++)
+            {
+                var label = result.Labels[i];
+                if (!groups.TryGetValue(label, out var list))
+                {
+                    list = new List<A>();
+                    groups[label] = list;
+                }
+                list.Add(dataset[i]);
+            }
+
+            var outliersScore = new List<OutlierScore<A>>(result.OutliersScore.Count);
+            for (var i = 0; i < result.OutliersScore.Count; i++)
+            {
+                var outlierScore = result.OutliersScore[i];
+                outliersScore.Add(new OutlierScore<A>(
+                    outlierScore.Score, outlierScore.CoreDistance, dataset[i]));
+            }
 
             return new HdbscanResult<A>
             {
-                Groups = groups,
+                Groups = new Dictionary<int, List<A>>(groups),
                 OutliersScore = outliersScore,
                 HasInfiniteStability = result.HasInfiniteStability,
                 RelativeValidity = result.RelativeValidity,

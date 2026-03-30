@@ -31,10 +31,10 @@ public class DistanceHelpers
          if (sparseDistance != null)
              return (a, b) =>
              {
-                 if (a < b)
-                     return sparseDistance.ContainsKey(a * numPoints + b) ? sparseDistance[a * numPoints + b] : 1;
-    
-                 return sparseDistance.ContainsKey(b * numPoints + a) ? sparseDistance[b * numPoints + a] : 1;
+                 var key = a < b
+                     ? a * numPoints + b
+                     : b * numPoints + a;
+                 return sparseDistance.TryGetValue(key, out var value) ? value : 1;
              };
     
          // Normal matrix with caching.

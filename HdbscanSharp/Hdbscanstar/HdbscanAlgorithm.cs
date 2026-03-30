@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using HdbscanSharp.Runner;
@@ -34,37 +35,44 @@ namespace HdbscanSharp.Hdbscanstar
 
 			for (var point = 0; point < numPoints; point++)
 			{
-				var kNNDistances = new double[numNeighbors];   //Sorted nearest distances found so far
-				for (var i = 0; i < numNeighbors; i++)
+				var kNNDistances = ArrayPool<double>.Shared.Rent(numNeighbors);   //Sorted nearest distances found so far
+				try
 				{
-					kNNDistances[i] = double.MaxValue;
-				}
-
-				for (var neighbor = 0; neighbor < numPoints; neighbor++)
-				{
-					if (point == neighbor)
-						continue;
-
-                    var distance = distances(point, neighbor);
-                    
-					//Check at which position in the nearest distances the current distance would fit:
-					var neighborIndex = numNeighbors;
-					while (neighborIndex >= 1 && distance < kNNDistances[neighborIndex - 1])
+					for (var i = 0; i < numNeighbors; i++)
 					{
-						neighborIndex--;
+						kNNDistances[i] = double.MaxValue;
 					}
 
-					//Shift elements in the array to make room for the current distance:
-					if (neighborIndex < numNeighbors)
+					for (var neighbor = 0; neighbor < numPoints; neighbor++)
 					{
-						for (var shiftIndex = numNeighbors - 1; shiftIndex > neighborIndex; shiftIndex--)
+						if (point == neighbor)
+							continue;
+
+	                    var distance = distances(point, neighbor);
+
+						//Check at which position in the nearest distances the current distance would fit:
+						var neighborIndex = numNeighbors;
+						while (neighborIndex >= 1 && distance < kNNDistances[neighborIndex - 1])
 						{
-							kNNDistances[shiftIndex] = kNNDistances[shiftIndex - 1];
+							neighborIndex--;
 						}
-						kNNDistances[neighborIndex] = distance;
+
+						//Shift elements in the array to make room for the current distance:
+						if (neighborIndex < numNeighbors)
+						{
+							for (var shiftIndex = numNeighbors - 1; shiftIndex > neighborIndex; shiftIndex--)
+							{
+								kNNDistances[shiftIndex] = kNNDistances[shiftIndex - 1];
+							}
+							kNNDistances[neighborIndex] = distance;
+						}
 					}
+					coreDistances[point] = kNNDistances[numNeighbors - 1];
 				}
-				coreDistances[point] = kNNDistances[numNeighbors - 1];
+				finally
+				{
+					ArrayPool<double>.Shared.Return(kNNDistances, clearArray: false);
+				}
 			}
 			return coreDistances;
 		}
@@ -215,8 +223,7 @@ namespace HdbscanSharp.Hdbscanstar
 			clusters.Add(new Cluster(1, null, double.NaN, mst.GetNumVertices()));
 
 			//Calculate number of constraints satisfied for cluster 1:
-			var clusterOne = new SortedSet<int>();
-			clusterOne.Add(1);
+			var clusterOne = new HashSet<int> { 1 };
 			CalculateNumConstraintsSatisfied(
 				clusterOne,
 				clusters,
@@ -224,8 +231,8 @@ namespace HdbscanSharp.Hdbscanstar
 				currentClusterLabels);
 
 			//Sets for the clusters and vertices that are affected by the edge(s) being removed:
-			var affectedClusterLabels = new SortedSet<int>();
-			var affectedVertices = new SortedSet<int>();
+			var affectedClusterLabels = new HashSet<int>();
+			var affectedVertices = new HashSet<int>();
 
 			while (currentEdgeIndex >= 0)
 			{
@@ -255,12 +262,9 @@ namespace HdbscanSharp.Hdbscanstar
 					continue;
 
 				//Check each cluster affected for a possible split:
-				while (affectedClusterLabels.Any())
+				while (TryTakeAny(affectedClusterLabels, out var examinedClusterLabel))
 				{
-					var examinedClusterLabel = affectedClusterLabels.Last();
-					affectedClusterLabels.Remove(examinedClusterLabel);
-
-					var examinedVertices = new SortedSet<int>();
+					var examinedVertices = new HashSet<int>();
 					var verticesToRemove = new List<int>();
 
 					//Get all affected vertices that are members of the cluster currently being examined:
@@ -276,8 +280,8 @@ namespace HdbscanSharp.Hdbscanstar
 					foreach (var vertex in verticesToRemove)
 						affectedVertices.Remove(vertex);
 
-					SortedSet<int> firstChildCluster = null;
-					LinkedList<int> unexploredFirstChildClusterPoints = null;
+					HashSet<int> firstChildCluster = null;
+					Queue<int> unexploredFirstChildClusterPoints = null;
 					var numChildClusters = 0;
 
 					/*
@@ -288,29 +292,26 @@ namespace HdbscanSharp.Hdbscanstar
 					 * split, otherwise, only spurious components are fully explored, in order to label 
 					 * them noise.
 					 */
-					while (examinedVertices.Any())
+					while (TryTakeAny(examinedVertices, out var rootVertex))
 					{
-						var constructingSubCluster = new SortedSet<int>();
-						var unexploredSubClusterPoints = new LinkedList<int>();
+						var constructingSubCluster = new HashSet<int>();
+						var unexploredSubClusterPoints = new Queue<int>();
 						var anyEdges = false;
 						var incrementedChildCount = false;
-						var rootVertex = examinedVertices.Last();
 						constructingSubCluster.Add(rootVertex);
-						unexploredSubClusterPoints.AddLast(rootVertex);
-						examinedVertices.Remove(rootVertex);
+						unexploredSubClusterPoints.Enqueue(rootVertex);
 
 						//Explore this potential child cluster as long as there are unexplored points:
-						while (unexploredSubClusterPoints.Any())
+						while (unexploredSubClusterPoints.Count > 0)
 						{
-							var vertexToExplore = unexploredSubClusterPoints.First();
-							unexploredSubClusterPoints.RemoveFirst();
+							var vertexToExplore = unexploredSubClusterPoints.Dequeue();
 
 							foreach (var neighbor in mst.GetEdgeListForVertex(vertexToExplore))
 							{
 								anyEdges = true;
 								if (constructingSubCluster.Add(neighbor))
 								{
-									unexploredSubClusterPoints.AddLast(neighbor);
+									unexploredSubClusterPoints.Enqueue(neighbor);
 									examinedVertices.Remove(neighbor);
 								}
 							}
@@ -335,7 +336,7 @@ namespace HdbscanSharp.Hdbscanstar
 						if (numChildClusters >= 2 && constructingSubCluster.Count >= minClusterSize && anyEdges)
 						{
 							//Check this child cluster is not equal to the unexplored first child cluster:
-							var firstChildClusterMember = firstChildCluster.Last();
+							var firstChildClusterMember = GetAnyMember(firstChildCluster);
 							if (constructingSubCluster.Contains(firstChildClusterMember))
 								numChildClusters--;
 							//Otherwise, create a new cluster:
@@ -363,16 +364,15 @@ namespace HdbscanSharp.Hdbscanstar
 					}
 
 					//Finish exploring and cluster the first child cluster if there was a split and it was not already clustered:
-					if (numChildClusters >= 2 && currentClusterLabels[firstChildCluster.First()] == examinedClusterLabel)
+					if (numChildClusters >= 2 && currentClusterLabels[GetAnyMember(firstChildCluster)] == examinedClusterLabel)
 					{
-						while (unexploredFirstChildClusterPoints.Any())
+						while (unexploredFirstChildClusterPoints.Count > 0)
 						{
-							var vertexToExplore = unexploredFirstChildClusterPoints.First();
-							unexploredFirstChildClusterPoints.RemoveFirst();
+							var vertexToExplore = unexploredFirstChildClusterPoints.Dequeue();
 							foreach (var neighbor in mst.GetEdgeListForVertex(vertexToExplore))
 							{
 								if (firstChildCluster.Add(neighbor))
-									unexploredFirstChildClusterPoints.AddLast(neighbor);
+									unexploredFirstChildClusterPoints.Enqueue(neighbor);
 							}
 						}
 						var newCluster = CreateNewCluster(firstChildCluster, currentClusterLabels,
@@ -393,8 +393,8 @@ namespace HdbscanSharp.Hdbscanstar
 					hierarchyPosition++;
 				}
 
-				//Assign file offsets and calculate the number of constraints satisfied:
-				var newClusterLabels = new SortedSet<int>();
+					//Assign file offsets and calculate the number of constraints satisfied:
+					var newClusterLabels = new HashSet<int>();
 				foreach (var newCluster in newClusters)
 				{
 					newCluster.HierarchyPosition = hierarchyPosition;
@@ -648,7 +648,7 @@ namespace HdbscanSharp.Hdbscanstar
 		/// <param name="edgeWeight">The edge weight at which to remove the points from their previous Cluster</param>
 		/// <returns>The new Cluster, or null if the clusterId was 0</returns>
 		private static Cluster CreateNewCluster(
-			SortedSet<int> points,
+			HashSet<int> points,
 			int[] clusterLabels,
 			Cluster parentCluster,
 			int clusterLabel,
@@ -697,7 +697,7 @@ namespace HdbscanSharp.Hdbscanstar
 		/// <param name="constraints">An List of constraints</param>
 		/// <param name="clusterLabels">An array of current cluster labels for points</param>
 		private static void CalculateNumConstraintsSatisfied(
-			SortedSet<int> newClusterLabels,
+			IReadOnlyCollection<int> newClusterLabels,
 			List<Cluster> clusters,
 			List<HdbscanConstraint> constraints,
 			int[] clusterLabels)
@@ -759,6 +759,28 @@ namespace HdbscanSharp.Hdbscanstar
 			{
 				parent.ReleaseVirtualChildCluster();
 			}
+		}
+
+		private static bool TryTakeAny(HashSet<int> set, out int value)
+		{
+			using var enumerator = set.GetEnumerator();
+			if (enumerator.MoveNext())
+			{
+				value = enumerator.Current;
+				set.Remove(value);
+				return true;
+			}
+
+			value = default;
+			return false;
+		}
+
+		private static int GetAnyMember(HashSet<int> set)
+		{
+			foreach (var value in set)
+				return value;
+
+			throw new InvalidOperationException("Set is empty.");
 		}
 	}
 }

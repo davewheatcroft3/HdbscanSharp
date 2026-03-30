@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HdbscanSharp.Distance
 {
@@ -102,7 +101,11 @@ namespace HdbscanSharp.Distance
             if (hasValue)
                 return value;
 
-            var magnitude = attributes.Keys.Sum(i => Math.Pow(attributes[i], 2));
+            double magnitude = 0;
+            foreach (var attribute in attributes)
+            {
+                magnitude += attribute.Value * attribute.Value;
+            }
             _tryAdd(index, magnitude);
             return magnitude;
         }
@@ -113,7 +116,12 @@ namespace HdbscanSharp.Distance
             if (hasValue)
                 return value;
 
-            var magnitude = attributes.Sum(val => Math.Pow(val, 2));
+            double magnitude = 0;
+            for (var i = 0; i < attributes.Length; i++)
+            {
+                var value = attributes[i];
+                magnitude += value * value;
+            }
             _tryAdd(index, magnitude);
             return magnitude;
         }
