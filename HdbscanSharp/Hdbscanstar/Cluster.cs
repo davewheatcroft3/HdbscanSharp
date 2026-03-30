@@ -131,7 +131,7 @@ namespace HdbscanSharp.Hdbscanstar
 			}
 		}
 
-		public void AddPointsToVirtualChildCluster(SortedSet<int> points)
+		public void AddPointsToVirtualChildCluster(IEnumerable<int> points)
 		{
 			foreach (var point in points)
 			{

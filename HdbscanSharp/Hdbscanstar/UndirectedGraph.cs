@@ -12,7 +12,7 @@ namespace HdbscanSharp.Hdbscanstar
 		private readonly int[] _verticesA;
 		private readonly int[] _verticesB;
 		private readonly double[] _edgeWeights;
-		private readonly List<int>[] _edges;
+		private readonly HashSet<int>[] _edges;
 
 		/// <summary>
 		/// Constructs a new UndirectedGraph, including creating an edge list for each vertex from the 
@@ -29,11 +29,11 @@ namespace HdbscanSharp.Hdbscanstar
 			_verticesA = verticesA;
 			_verticesB = verticesB;
 			_edgeWeights = edgeWeights;
-			_edges = new List<int>[numVertices];
+			_edges = new HashSet<int>[numVertices];
 
 			for (var i = 0; i < _edges.Length; i++)
 			{
-				_edges[i] = new List<int>(1 + edgeWeights.Length / numVertices);
+				_edges[i] = new HashSet<int>();
 			}
 
 			for (var i = 0; i < edgeWeights.Length; i++)
@@ -196,7 +196,7 @@ namespace HdbscanSharp.Hdbscanstar
 			return _edgeWeights[index];
 		}
 
-		public List<int> GetEdgeListForVertex(int vertex)
+		public HashSet<int> GetEdgeListForVertex(int vertex)
 		{
 			return _edges[vertex];
 		}
