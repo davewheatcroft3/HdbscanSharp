@@ -119,8 +119,8 @@ namespace HdbscanSharp.Distance
             double magnitude = 0;
             for (var i = 0; i < attributes.Length; i++)
             {
-                var value = attributes[i];
-                magnitude += value * value;
+                var attributeValue = attributes[i];
+                magnitude += attributeValue * attributeValue;
             }
             _tryAdd(index, magnitude);
             return magnitude;
